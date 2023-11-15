@@ -115,7 +115,7 @@ void window_show(Window *window)
 
 	/* Clear Screen */
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	SDL_RenderClear(renderer);
+	// SDL_RenderClear(renderer);
 
 	dstrect.x = window->mouseX;
 	dstrect.y = window->mouseY;
@@ -182,8 +182,8 @@ void window_show(Window *window)
 		y = j + window->offsetY;
 		z = k;
 		gridtopixel(window, x, y, z, &a, &b);
-		
-		dstrect.x = a;
+
+		dstrect.x = a - window->palletEntryWidth / 2.0;
 		dstrect.y = b;
 		dstrect.w = window->palletEntryWidth;
 		dstrect.h = window->palletEntryHeight;
@@ -247,7 +247,10 @@ int main(int argc, char *argv[])
 		if (mouse & SDL_BUTTON(1)) {
 			int x, y;
 			pixeltogrid(&window, window.mouseX, window.mouseY, &x, &y);
-			grid[x + y * GRID_COLUMNS] = 0;
+			if (x == 8 && y == 0) {
+				SDL_SetRenderDrawColor(window.renderer, 255, 0, 0, 255);
+				SDL_RenderDrawPoint(window.renderer, window.mouseX, window.mouseY);
+			}
 		}
 
 		window_show(&window);
