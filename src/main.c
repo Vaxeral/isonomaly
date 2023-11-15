@@ -115,7 +115,7 @@ void window_show(Window *window)
 
 	/* Clear Screen */
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	// SDL_RenderClear(renderer);
+	SDL_RenderClear(renderer);
 
 	dstrect.x = window->mouseX;
 	dstrect.y = window->mouseY;
@@ -145,10 +145,10 @@ void window_show(Window *window)
 	for (int i = -lines; i < lines; i++) {
 		int x1, y1, x2, y2;
 		x1 = 0;
-		y1 = window->palletEntryHeight / 4
+		y1 = window->palletEntryHeight / 2
 			+ i * window->palletEntryHeight / 2;
 		x2 = width;
-		y2 = window->palletEntryHeight / 4
+		y2 = window->palletEntryHeight / 2
 			+ m * (i * window->palletEntryWidth + width);
 		SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
 	}
@@ -157,10 +157,10 @@ void window_show(Window *window)
 	for (int i = 0; i < 2 * lines; i++) {
 		int x1, y1, x2, y2;
 		x1 = 0;
-		y1 = window->palletEntryHeight / 4
+		y1 = window->palletEntryHeight / 2
 			+ i * window->palletEntryHeight / 2;
 		x2 = width;
-		y2 = window->palletEntryHeight / 4
+		y2 = window->palletEntryHeight / 2
 			+ -m * (-i * window->palletEntryWidth + width);
 		SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
 	}
@@ -183,8 +183,8 @@ void window_show(Window *window)
 		z = k;
 		gridtopixel(window, x, y, z, &a, &b);
 
-		dstrect.x = a - window->palletEntryWidth / 2.0;
-		dstrect.y = b;
+		dstrect.x = a - window->palletEntryWidth / 2;
+		dstrect.y = b - window->palletEntryHeight / 2;
 		dstrect.w = window->palletEntryWidth;
 		dstrect.h = window->palletEntryHeight;
 		SDL_RenderCopy(renderer, window->pallet, &srcrect, &dstrect);
@@ -247,10 +247,7 @@ int main(int argc, char *argv[])
 		if (mouse & SDL_BUTTON(1)) {
 			int x, y;
 			pixeltogrid(&window, window.mouseX, window.mouseY, &x, &y);
-			if (x == 8 && y == 0) {
-				SDL_SetRenderDrawColor(window.renderer, 255, 0, 0, 255);
-				SDL_RenderDrawPoint(window.renderer, window.mouseX, window.mouseY);
-			}
+			grid[x + y * GRID_COLUMNS] = 0;
 		}
 
 		window_show(&window);
