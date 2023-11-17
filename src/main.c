@@ -71,7 +71,7 @@ int pallet_init(Pallet *pallet, SDL_Renderer *renderer, int x, int y, int w, int
 	pallet->port.h = h;
 	
 	pallet->renderer = renderer;
-	surface = IMG_Load("res/atlas.png");
+	surface = IMG_Load("res/spritesheet.png");
 	if (surface == NULL) {
 		fprintf(stderr, "%s\n", IMG_GetError());
 		goto failure;
@@ -269,14 +269,6 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-
-	SDL_Surface *surface;
-	surface = IMG_Load("res/atlas.png");
-	if (surface == NULL) {
-		fprintf(stderr, "%s\n", IMG_GetError());
-		exit(EXIT_FAILURE);
-	}
-
 	Pallet pallet;
 	Canvas canvas;
 	pallet_init(&pallet, renderer,
@@ -290,8 +282,15 @@ int main(int argc, char *argv[])
 	const Uint8 *keys =
 		SDL_GetKeyboardState(NULL);
 
+	int dx, dy;
+	int startX, startY;
+	int mouseX, mouseY;
+
 	Uint64 ticks, start, end;
 	bool doUpdate;
+	bool buttonDown;
+
+	buttonDown = false;
 
 	while (1) {
 		SDL_Event event;
@@ -301,6 +300,26 @@ int main(int argc, char *argv[])
 			if (event.type == SDL_KEYDOWN)
 				if (event.key.keysym.sym == SDLK_r)
 					memset(canvas.grid, 0, sizeof(canvas.grid));
+			if (event.type == SDL_MOUSEMOTION) {
+				if (buttonDown) {
+					dx = event.motion.x - mouseX,
+					dy = event.motion.y - mouseY;
+					canvas.view.x = startX + dx;
+					canvas.view.y = startY + dy;
+				}
+			} else if (event.type == SDL_MOUSEBUTTONDOWN) {
+				if (event.button.button == SDL_BUTTON_RIGHT) {
+					startX = canvas.view.x;
+					startY = canvas.view.y;
+					mouseX = event.button.x;
+					mouseY = event.button.y;
+					buttonDown = true;
+				}
+			} else if (event.type == SDL_MOUSEBUTTONUP) {
+				if (event.button.button == SDL_BUTTON_RIGHT) {
+					buttonDown = false;
+				}
+			}
 		}
 
 		end = SDL_GetTicks64();
