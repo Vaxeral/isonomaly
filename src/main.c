@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <stddef.h>
 
+#define GRID_COLUMNS 16
+#define GRID_ROWS 16
+#define GRID_CELLS (GRID_COLUMNS * GRID_ROWS)
+
 typedef struct pallet {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
@@ -24,13 +28,22 @@ typedef struct canvas {
 	SDL_Rect port;
 	SDL_Rect view;
 	SDL_Rect step;
+	SDL_Rect tile;
+	char grid[GRID_CELLS];
 } Canvas;
 
 SDL_Window *window;
 SDL_Renderer *renderer;
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+void gridtopixel(const Canvas *canvas, int x, int y, SDL_FRect *pixel)
+{
+	Pallet *pallet = canvas->pallet;
+	pixel->x = (x-y) * pallet->cell.w / 2.0 + canvas->view.x;
+	pixel->y = (x+y) * pallet->cell.h / 2.0 + canvas->view.y;
+}
+
+#define WINDOW_WIDTH 640
+#define WINDOW_HEIGHT 480
 
 int pallet_init(Pallet *pallet, SDL_Renderer *renderer, int x, int y, int w, int h)
 {
@@ -49,7 +62,7 @@ int pallet_init(Pallet *pallet, SDL_Renderer *renderer, int x, int y, int w, int
 	pallet->port.h = h;
 	
 	pallet->renderer = renderer;
-	surface = IMG_Load("res/atlas.png");
+	surface = IMG_Load("res/stone-wall.png");
 	if (surface == NULL) {
 		fprintf(stderr, "%s\n", IMG_GetError());
 		goto failure;
@@ -99,9 +112,11 @@ int canvas_init(Canvas *canvas,
 	int x, int y, int w, int h,
 	Pallet *pallet)
 {
+	memset(canvas, 0, sizeof(*canvas));
+
 	canvas->pallet = pallet;
-	canvas->step.y = 1.0; // pallet->cell.h / 2.0;
-	canvas->step.x = 1.0; // pallet->cell.w / 2.0;
+	canvas->step.y = 4.0;
+	canvas->step.x = 4.0;
 
 	canvas->view.x = 0;
 	canvas->view.y = 0;
@@ -118,6 +133,15 @@ int canvas_init(Canvas *canvas,
 			canvas->port.w,
 			canvas->port.h);
 	canvas->window = SDL_RenderGetWindow(canvas->renderer);
+
+	canvas->tile.x = 0;
+	canvas->tile.y = 0;
+	canvas->tile.w = 32;
+	canvas->tile.h = 32;
+
+	for (int i = 0; i < GRID_CELLS; i++)
+		canvas->grid[i] = rand() % 2;
+
 	return 0;
 }
 
@@ -150,9 +174,9 @@ void canvas_show(Canvas *canvas)
 	dy = canvas->view.y % pallet->cell.h;
 
 	x1 = -pallet->cell.w + dx;
-	y1 = -pallet->cell.h + dy + height;
+	y1 = -pallet->cell.h + dy + pallet->cell.h / 2.0 + height;
 	x2 = -pallet->cell.w + dx + width;
-	y2 = -pallet->cell.h + dy + height
+	y2 = -pallet->cell.h + dy + pallet->cell.h / 2.0 + height
 			+ width * (1 / m);
 
 	for (int i = 0; i < nLines; i++) {
@@ -162,15 +186,36 @@ void canvas_show(Canvas *canvas)
 	}
 
 	x1 = -pallet->cell.w + dx;
-	y1 = -pallet->cell.h + dy;
+	y1 = -pallet->cell.h + dy + pallet->cell.h / 2.0;
 	x2 = -pallet->cell.w + dx + width;
-	y2 = -pallet->cell.h + dy
+	y2 = -pallet->cell.h + dy + pallet->cell.h / 2.0
 			+ width * -(1 / m);
 
 	for (int i = 0; i < nLines; i++) {
 		y1 += pallet->cell.h;
 		y2 += pallet->cell.h;
 		SDL_RenderDrawLine(canvas->renderer, x1, y1, x2, y2);
+	}
+
+	for (int i = 0; i < GRID_COLUMNS; i++)
+	for (int j = 0; j < GRID_ROWS; j++) {
+		SDL_FRect pixel;
+
+		if (canvas->grid[i + j * GRID_COLUMNS])
+			continue;
+
+		gridtopixel(canvas, i, j, &pixel);
+
+		SDL_FRect dstrect;
+		SDL_Rect srcrect;
+
+		srcrect = canvas->tile;
+
+		dstrect.x = pixel.x;
+		dstrect.y = pixel.y - (canvas->tile.h - pallet->cell.h);
+		dstrect.w = canvas->tile.w;
+		dstrect.h = canvas->tile.h;
+		SDL_RenderCopyF(canvas->renderer, pallet->atlas, &srcrect, &dstrect);
 	}
 
 	SDL_SetRenderTarget(canvas->renderer, NULL);
@@ -249,6 +294,8 @@ int main(int argc, char *argv[])
 		end = SDL_GetTicks64();
 		ticks += end - start;
 		start = end;
+
+		// const Uint32 button = SDL_GetMouseState()
 
 		if (ticks > 1.0 / 32.0 * 1000.0)
 			doUpdate = true;
