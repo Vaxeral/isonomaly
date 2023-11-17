@@ -105,8 +105,8 @@ int canvas_init(Canvas *canvas,
 	Pallet *pallet)
 {
 	canvas->pallet = pallet;
-	canvas->step.y = pallet->cell.h / 2.0;
-	canvas->step.x = pallet->cell.w / 2.0;
+	canvas->step.y = 1.0; // pallet->cell.h / 2.0;
+	canvas->step.x = 1.0; // pallet->cell.w / 2.0;
 
 	canvas->view.x = 0;
 	canvas->view.y = 0;
@@ -145,10 +145,20 @@ void canvas_show(Canvas *canvas)
 	SDL_SetRenderDrawColor(canvas->renderer, 200, 200, 200, 255);
 
 	int x1, y1, x2, y2;
-	x1 = 0;
-	y1 = canvas->port.h;
-	x2 = canvas->port.w;
-	y2 = canvas->port.w * (1 / m) + y1;
+	int dx, dy;
+	int width, height;
+
+	width = canvas->port.w + pallet->cell.w;
+	height = canvas->port.h;
+
+	dx = canvas->view.x % pallet->cell.w;
+	dy = canvas->view.y % pallet->cell.h;
+
+	x1 = -pallet->cell.w + dx;
+	y1 = -pallet->cell.h + dy + height;
+	x2 = -pallet->cell.w + dx + width;
+	y2 = -pallet->cell.h + dy + height
+			+ width * (1 / m);
 
 	for (int i = 0; i < nLines; i++) {
 		y1 -= pallet->cell.h;
@@ -156,10 +166,10 @@ void canvas_show(Canvas *canvas)
 		SDL_RenderDrawLine(canvas->renderer, x1, y1, x2, y2);
 	}
 
-	x1 = 0;
-	y1 = 0;
-	x2 = canvas->port.w;
-	y2 = canvas->port.w * -(1 / m) + y1;
+	x1 = -pallet->cell.w + dx;
+	y1 = -pallet->cell.h + dy;
+	x2 = -pallet->cell.w + dx + width;
+	y2 = -pallet->cell.h + dy + width * -(1 / m);
 
 	for (int i = 0; i < nLines; i++) {
 		y1 += pallet->cell.h;
