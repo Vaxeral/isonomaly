@@ -35,11 +35,20 @@ typedef struct canvas {
 SDL_Window *window;
 SDL_Renderer *renderer;
 
-void gridtopixel(const Canvas *canvas, int x, int y, SDL_FRect *pixel)
+void gridtopixel(const Canvas *canvas, int i, int j, SDL_FRect *pixel)
 {
 	Pallet *pallet = canvas->pallet;
-	pixel->x = (x-y) * pallet->cell.w / 2.0 + canvas->view.x;
-	pixel->y = (x+y) * pallet->cell.h / 2.0 + canvas->view.y;
+	pixel->x = (i-j) * pallet->cell.w / 2.0 + canvas->view.x;
+	pixel->y = (i+j) * pallet->cell.h / 2.0 + canvas->view.y;
+}
+
+void pixeltogrid(const Canvas *canvas, int x, int y, int *i, int *j)
+{
+	Pallet *pallet = canvas->pallet;
+	x = x - canvas->view.x - pallet->cell.w / 2.0;
+	y = y - canvas->view.y;
+	*i = (float)y / pallet->cell.h + (float)x / pallet->cell.w;
+	*j = (float)y / pallet->cell.h - (float)x / pallet->cell.w;
 }
 
 #define WINDOW_WIDTH 640
@@ -140,7 +149,7 @@ int canvas_init(Canvas *canvas,
 	canvas->tile.h = 32;
 
 	for (int i = 0; i < GRID_CELLS; i++)
-		canvas->grid[i] = rand() % 2;
+		canvas->grid[i] = 0;
 
 	return 0;
 }
@@ -201,7 +210,7 @@ void canvas_show(Canvas *canvas)
 	for (int j = 0; j < GRID_ROWS; j++) {
 		SDL_FRect pixel;
 
-		if (canvas->grid[i + j * GRID_COLUMNS])
+		if (canvas->grid[i + j * GRID_COLUMNS] == 0)
 			continue;
 
 		gridtopixel(canvas, i, j, &pixel);
@@ -239,7 +248,7 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	window = SDL_CreateWindow("isonomly",
+	window = SDL_CreateWindow("isonomaly",
 			SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED,
 			WINDOW_WIDTH,
@@ -295,7 +304,18 @@ int main(int argc, char *argv[])
 		ticks += end - start;
 		start = end;
 
-		// const Uint32 button = SDL_GetMouseState()
+
+		SDL_Rect mouse;
+		const Uint32 button = SDL_GetMouseState(&mouse.x, &mouse.y);
+
+		if (button & SDL_BUTTON(1)) {
+			int x, y, i, j;
+			x = mouse.x - canvas.port.x;
+			y = mouse.y - canvas.port.y;
+			pixeltogrid(&canvas, x, y, &i, &j);
+			if (i >= 0 && i < GRID_COLUMNS && j >= 0 && j < GRID_ROWS)
+				canvas.grid[i + j * GRID_COLUMNS] = 1;
+		}
 
 		if (ticks > 1.0 / 32.0 * 1000.0)
 			doUpdate = true;
