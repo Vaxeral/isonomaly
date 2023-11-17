@@ -30,6 +30,7 @@ typedef struct canvas {
 	SDL_Rect step;
 	SDL_Rect tile;
 	SDL_Rect grid[GRID_CELLS];
+	SDL_Rect mouse;
 } Canvas;
 
 SDL_Window *window;
@@ -206,6 +207,8 @@ void canvas_show(Canvas *canvas)
 		SDL_RenderDrawLine(canvas->renderer, x1, y1, x2, y2);
 	}
 
+	SDL_FRect dstrect;
+	SDL_Rect srcrect;
 	for (int i = 0; i < GRID_COLUMNS; i++)
 	for (int j = 0; j < GRID_ROWS; j++) {
 		SDL_FRect pixel;
@@ -215,8 +218,6 @@ void canvas_show(Canvas *canvas)
 
 		gridtopixel(canvas, i, j, &pixel);
 
-		SDL_FRect dstrect;
-		SDL_Rect srcrect;
 
 		srcrect = canvas->grid[i + j * GRID_COLUMNS];
 
@@ -226,6 +227,27 @@ void canvas_show(Canvas *canvas)
 		dstrect.h = canvas->tile.h;
 		SDL_RenderCopyF(canvas->renderer, pallet->atlas, &srcrect, &dstrect);
 	}
+
+	int x, y, i, j;
+	SDL_FRect pixel;
+	x = canvas->mouse.x;
+	y = canvas->mouse.y;
+
+	pixeltogrid(canvas, x, y, &i, &j);
+	gridtopixel(canvas, i, j, &pixel);
+
+	srcrect = canvas->tile;
+
+	dstrect.x = pixel.x;
+	dstrect.y = pixel.y - (canvas->tile.h - pallet->cell.h);
+	dstrect.w = canvas->tile.w;
+	dstrect.h = canvas->tile.h;
+
+	SDL_SetTextureAlphaMod(pallet->atlas, 1.0 / 2.0 * 255.0);
+	SDL_SetTextureBlendMode(pallet->atlas, SDL_BLENDMODE_BLEND);
+	SDL_RenderCopyF(canvas->renderer, pallet->atlas, &srcrect, &dstrect);
+	SDL_SetTextureAlphaMod(pallet->atlas, 255.0);
+
 
 	SDL_SetRenderTarget(canvas->renderer, NULL);
 	SDL_RenderCopy(canvas->renderer, canvas->target, NULL, &canvas->port);
@@ -329,6 +351,9 @@ int main(int argc, char *argv[])
 
 		SDL_Rect mouse;
 		const Uint32 button = SDL_GetMouseState(&mouse.x, &mouse.y);
+		canvas.mouse.x = mouse.x - canvas.port.x;
+		canvas.mouse.y = mouse.y - canvas.port.y;
+
 
 		if (button & SDL_BUTTON(1)) {
 			if (mouse.x >= canvas.port.x &&
