@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#define GRID_COLUMNS 16
-#define GRID_ROWS 16
+#define GRID_COLUMNS 64
+#define GRID_ROWS 64
 #define GRID_CELLS (GRID_COLUMNS * GRID_ROWS)
 
 typedef struct pallet {
@@ -29,7 +29,7 @@ typedef struct canvas {
 	SDL_Rect view;
 	SDL_Rect step;
 	SDL_Rect tile;
-	char grid[GRID_CELLS];
+	SDL_Rect grid[GRID_CELLS];
 } Canvas;
 
 SDL_Window *window;
@@ -51,8 +51,8 @@ void pixeltogrid(const Canvas *canvas, int x, int y, int *i, int *j)
 	*j = (float)y / pallet->cell.h - (float)x / pallet->cell.w;
 }
 
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 512
 
 int pallet_init(Pallet *pallet, SDL_Renderer *renderer, int x, int y, int w, int h)
 {
@@ -71,7 +71,7 @@ int pallet_init(Pallet *pallet, SDL_Renderer *renderer, int x, int y, int w, int
 	pallet->port.h = h;
 	
 	pallet->renderer = renderer;
-	surface = IMG_Load("res/stone-wall.png");
+	surface = IMG_Load("res/atlas.png");
 	if (surface == NULL) {
 		fprintf(stderr, "%s\n", IMG_GetError());
 		goto failure;
@@ -149,7 +149,7 @@ int canvas_init(Canvas *canvas,
 	canvas->tile.h = 32;
 
 	for (int i = 0; i < GRID_CELLS; i++)
-		canvas->grid[i] = 0;
+		canvas->grid[i] = (SDL_Rect){0};
 
 	return 0;
 }
@@ -161,7 +161,7 @@ void canvas_show(Canvas *canvas)
 
 	const int nLines =
 		canvas->port.w / pallet->cell.w +
-		canvas->port.h / pallet->cell.h;
+		canvas->port.h / pallet->cell.h + 16;
 
 	SDL_SetRenderTarget(canvas->renderer, canvas->target);
 
@@ -170,22 +170,22 @@ void canvas_show(Canvas *canvas)
 	SDL_RenderClear(canvas->renderer);
 
 	/* Update Canvas */
-	SDL_SetRenderDrawColor(canvas->renderer, 200, 200, 200, 255);
+	SDL_SetRenderDrawColor(canvas->renderer, 150, 150, 150, 255);
 
 	int x1, y1, x2, y2;
 	int dx, dy;
 	int width, height;
 
-	width = canvas->port.w + pallet->cell.w;
+	width = canvas->port.w + 2 * pallet->cell.w;
 	height = canvas->port.h;
 
 	dx = canvas->view.x % pallet->cell.w;
 	dy = canvas->view.y % pallet->cell.h;
 
-	x1 = -pallet->cell.w + dx;
-	y1 = -pallet->cell.h + dy + pallet->cell.h / 2.0 + height;
-	x2 = -pallet->cell.w + dx + width;
-	y2 = -pallet->cell.h + dy + pallet->cell.h / 2.0 + height
+	x2 = -pallet->cell.w + dx;
+	y2 = -pallet->cell.h + dy + pallet->cell.h / 2.0 + height;
+	x1 = -pallet->cell.w + dx + width;
+	y1 = -pallet->cell.h + dy + pallet->cell.h / 2.0 + height
 			+ width * (1 / m);
 
 	for (int i = 0; i < nLines; i++) {
@@ -194,10 +194,10 @@ void canvas_show(Canvas *canvas)
 		SDL_RenderDrawLine(canvas->renderer, x1, y1, x2, y2);
 	}
 
-	x1 = -pallet->cell.w + dx;
-	y1 = -pallet->cell.h + dy + pallet->cell.h / 2.0;
-	x2 = -pallet->cell.w + dx + width;
-	y2 = -pallet->cell.h + dy + pallet->cell.h / 2.0
+	x2 = -pallet->cell.w + dx;
+	y2 = -pallet->cell.h + dy + pallet->cell.h / 2.0;
+	x1 = -pallet->cell.w + dx + width;
+	y1 = -pallet->cell.h + dy + pallet->cell.h / 2.0
 			+ width * -(1 / m);
 
 	for (int i = 0; i < nLines; i++) {
@@ -210,7 +210,7 @@ void canvas_show(Canvas *canvas)
 	for (int j = 0; j < GRID_ROWS; j++) {
 		SDL_FRect pixel;
 
-		if (canvas->grid[i + j * GRID_COLUMNS] == 0)
+		if (canvas->grid[i + j * GRID_COLUMNS].w == 0)
 			continue;
 
 		gridtopixel(canvas, i, j, &pixel);
@@ -218,7 +218,7 @@ void canvas_show(Canvas *canvas)
 		SDL_FRect dstrect;
 		SDL_Rect srcrect;
 
-		srcrect = canvas->tile;
+		srcrect = canvas->grid[i + j * GRID_COLUMNS];
 
 		dstrect.x = pixel.x;
 		dstrect.y = pixel.y - (canvas->tile.h - pallet->cell.h);
@@ -298,6 +298,9 @@ int main(int argc, char *argv[])
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				goto quit;
+			if (event.type == SDL_KEYDOWN)
+				if (event.key.keysym.sym == SDLK_r)
+					memset(canvas.grid, 0, sizeof(canvas.grid));
 		}
 
 		end = SDL_GetTicks64();
@@ -309,12 +312,23 @@ int main(int argc, char *argv[])
 		const Uint32 button = SDL_GetMouseState(&mouse.x, &mouse.y);
 
 		if (button & SDL_BUTTON(1)) {
-			int x, y, i, j;
-			x = mouse.x - canvas.port.x;
-			y = mouse.y - canvas.port.y;
-			pixeltogrid(&canvas, x, y, &i, &j);
-			if (i >= 0 && i < GRID_COLUMNS && j >= 0 && j < GRID_ROWS)
-				canvas.grid[i + j * GRID_COLUMNS] = 1;
+			if (mouse.x >= canvas.port.x &&
+					mouse.x < canvas.port.x + canvas.port.w &&
+					mouse.y >= canvas.port.y &&
+					mouse.y < canvas.port.y + canvas.port.h) {
+				int x, y, i, j;
+				x = mouse.x - canvas.port.x;
+				y = mouse.y - canvas.port.y;
+				pixeltogrid(&canvas, x, y, &i, &j);
+				if (i >= 0 && i < GRID_COLUMNS && j >= 0 && j < GRID_ROWS)
+					canvas.grid[i + j * GRID_COLUMNS] = canvas.tile;
+			} else {
+				int i, j;
+				i = mouse.x / canvas.tile.w;
+				j = mouse.y / canvas.tile.h;
+				canvas.tile.x = i * canvas.tile.w;
+				canvas.tile.y = j * canvas.tile.h;
+			}
 		}
 
 		if (ticks > 1.0 / 32.0 * 1000.0)
@@ -322,11 +336,11 @@ int main(int argc, char *argv[])
 
 		if (doUpdate) {
 			if (keys[SDL_SCANCODE_DOWN])
-				canvas.view.y -= (canvas.view.y > 0) ? canvas.step.y : 0;
+				canvas.view.y -= canvas.step.y;
 			if (keys[SDL_SCANCODE_UP])
 				canvas.view.y += canvas.step.y;
 			if (keys[SDL_SCANCODE_RIGHT])
-				canvas.view.x -= (canvas.view.x > 0) ? canvas.step.x : 0;
+				canvas.view.x -= canvas.step.x;
 			if (keys[SDL_SCANCODE_LEFT])
 				canvas.view.x += canvas.step.x;
 			doUpdate = false;
