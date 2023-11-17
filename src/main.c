@@ -4,10 +4,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-/*
-	TODO: move the grid.
-*/
-
 typedef struct pallet {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
@@ -28,7 +24,6 @@ typedef struct canvas {
 	SDL_Rect port;
 	SDL_Rect view;
 	SDL_Rect step;
-
 } Canvas;
 
 SDL_Window *window;
@@ -169,7 +164,8 @@ void canvas_show(Canvas *canvas)
 	x1 = -pallet->cell.w + dx;
 	y1 = -pallet->cell.h + dy;
 	x2 = -pallet->cell.w + dx + width;
-	y2 = -pallet->cell.h + dy + width * -(1 / m);
+	y2 = -pallet->cell.h + dy
+			+ width * -(1 / m);
 
 	for (int i = 0; i < nLines; i++) {
 		y1 += pallet->cell.h;
@@ -254,17 +250,17 @@ int main(int argc, char *argv[])
 		ticks += end - start;
 		start = end;
 
-		if (ticks > 1.0 / 8.0 * 1000.0)
+		if (ticks > 1.0 / 32.0 * 1000.0)
 			doUpdate = true;
 
 		if (doUpdate) {
-			if (keys[SDL_SCANCODE_UP])
-				canvas.view.y -= canvas.step.y;
 			if (keys[SDL_SCANCODE_DOWN])
+				canvas.view.y -= (canvas.view.y > 0) ? canvas.step.y : 0;
+			if (keys[SDL_SCANCODE_UP])
 				canvas.view.y += canvas.step.y;
-			if (keys[SDL_SCANCODE_LEFT])
-				canvas.view.x -= canvas.step.x;
 			if (keys[SDL_SCANCODE_RIGHT])
+				canvas.view.x -= (canvas.view.x > 0) ? canvas.step.x : 0;
+			if (keys[SDL_SCANCODE_LEFT])
 				canvas.view.x += canvas.step.x;
 			doUpdate = false;
 			ticks = 0;
