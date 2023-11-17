@@ -1,256 +1,268 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <stdbool.h>
 #include <stdlib.h>
-#include <time.h>
+#include <stddef.h>
+
 /*
-	TODO: Fix shading on iso stair tile.
+	TODO: move the grid.
 */
-typedef struct window {
+
+typedef struct pallet {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
-	SDL_Texture *pallet;
-	int palletWidth, palletHeight;
-	int palletRows, palletColumns;
-	int palletEntryWidth, palletEntryHeight;
-	int palletEntrySelected;
-	int palletSize;
-	int offsetX, offsetY;
-	int mouseX, mouseY;
-} Window;
+	SDL_Texture *target;
+	SDL_Rect port;
+	SDL_Rect view;
+	SDL_Rect cell;
+	SDL_Texture *atlas;
+	SDL_Rect *tiles;
+	size_t nTiles;
+} Pallet;
 
-#define SDL_FAILURE 1
-#define IMG_FAILURE 2
+typedef struct canvas {
+	SDL_Window *window;
+	SDL_Texture *target;
+	SDL_Renderer *renderer;
+	Pallet *pallet;
+	SDL_Rect port;
+	SDL_Rect view;
+	SDL_Rect step;
 
-#define GRID_COLUMNS 16
-#define GRID_ROWS 16
-#define GRID_LAYERS 16
-#define GRID_SPACES (GRID_COLUMNS * GRID_ROWS * GRID_LAYERS)
-char grid[GRID_SPACES];
+} Canvas;
 
-int window_init(Window *window)
+SDL_Window *window;
+SDL_Renderer *renderer;
+
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
+
+int pallet_init(Pallet *pallet, SDL_Renderer *renderer, int x, int y, int w, int h)
+{
+	Uint32 format;
+	SDL_Surface *surface;
+
+	pallet->cell.w = 32;
+	pallet->cell.h = 16;
+
+	pallet->view.x = 0;
+	pallet->view.y = 0;
+	
+	pallet->port.x = x;
+	pallet->port.y = y;
+	pallet->port.w = w;
+	pallet->port.h = h;
+	
+	pallet->renderer = renderer;
+	surface = IMG_Load("res/atlas.png");
+	if (surface == NULL) {
+		fprintf(stderr, "%s\n", IMG_GetError());
+		goto failure;
+	}
+	pallet->atlas = SDL_CreateTextureFromSurface(pallet->renderer, surface);
+	if (pallet->atlas == NULL) {
+		fprintf(stderr, "%s\n", SDL_GetError());
+		goto failure;
+	}
+
+	SDL_QueryTexture(pallet->atlas, &format, NULL, NULL, NULL);
+
+	pallet->target = SDL_CreateTexture(pallet->renderer,
+			format,
+			SDL_TEXTUREACCESS_TARGET,
+			pallet->port.w,
+			pallet->port.h);
+	pallet->window = SDL_RenderGetWindow(pallet->renderer);
+
+	return 0;
+failure:
+	SDL_DestroyTexture(pallet->target);
+	return 1;
+}
+
+void pallet_show(Pallet *pallet)
+{
+	SDL_SetRenderTarget(pallet->renderer, pallet->target);
+
+	/* Clear Canvas */
+	SDL_SetRenderDrawColor(pallet->renderer, 100, 100, 100, 255);
+	SDL_RenderClear(pallet->renderer);
+
+	/* Update Canvas */
+	SDL_Rect rect;
+	rect.x = 0;
+	rect.y = 0;
+	SDL_QueryTexture(pallet->atlas, NULL, NULL, &rect.w, &rect.h);
+	SDL_RenderCopy(pallet->renderer, pallet->atlas, NULL, &rect);
+
+	SDL_SetRenderTarget(pallet->renderer, NULL);
+	SDL_RenderCopy(pallet->renderer, pallet->target, NULL, &pallet->port);
+}
+
+int canvas_init(Canvas *canvas,
+	SDL_Renderer *renderer,
+	int x, int y, int w, int h,
+	Pallet *pallet)
+{
+	canvas->pallet = pallet;
+	canvas->step.y = pallet->cell.h / 2.0;
+	canvas->step.x = pallet->cell.w / 2.0;
+
+	canvas->view.x = 0;
+	canvas->view.y = 0;
+
+	canvas->port.x = x;
+	canvas->port.y = y;
+	canvas->port.w = w;
+	canvas->port.h = h;
+
+	canvas->renderer = renderer;
+	canvas->target = SDL_CreateTexture(canvas->renderer,
+			SDL_PIXELFORMAT_ABGR8888,
+			SDL_TEXTUREACCESS_TARGET,
+			canvas->port.w,
+			canvas->port.h);
+	canvas->window = SDL_RenderGetWindow(canvas->renderer);
+	return 0;
+}
+
+void canvas_show(Canvas *canvas)
+{
+	const Pallet *pallet = canvas->pallet;
+	const float m = pallet->cell.w / pallet->cell.h;
+
+	const int nLines =
+		canvas->port.w / pallet->cell.w +
+		canvas->port.h / pallet->cell.h;
+
+	SDL_SetRenderTarget(canvas->renderer, canvas->target);
+
+	/* Clear Canvas */
+	SDL_SetRenderDrawColor(canvas->renderer, 85, 107, 47, 255);
+	SDL_RenderClear(canvas->renderer);
+
+	/* Update Canvas */
+	SDL_SetRenderDrawColor(canvas->renderer, 200, 200, 200, 255);
+
+	int x1, y1, x2, y2;
+	x1 = 0;
+	y1 = canvas->port.h;
+	x2 = canvas->port.w;
+	y2 = canvas->port.w * (1 / m) + y1;
+
+	for (int i = 0; i < nLines; i++) {
+		y1 -= pallet->cell.h;
+		y2 -= pallet->cell.h;
+		SDL_RenderDrawLine(canvas->renderer, x1, y1, x2, y2);
+	}
+
+	x1 = 0;
+	y1 = 0;
+	x2 = canvas->port.w;
+	y2 = canvas->port.w * -(1 / m) + y1;
+
+	for (int i = 0; i < nLines; i++) {
+		y1 += pallet->cell.h;
+		y2 += pallet->cell.h;
+		SDL_RenderDrawLine(canvas->renderer, x1, y1, x2, y2);
+	}
+
+	SDL_SetRenderTarget(canvas->renderer, NULL);
+	SDL_RenderCopy(canvas->renderer, canvas->target, NULL, &canvas->port);
+}
+
+int main(int argc, char *argv[])
 {
 	int error;
 	int flags;
 
-	srand(time(NULL));
-
 	error = SDL_Init(SDL_INIT_VIDEO);
 	if (error) {
 		fprintf(stderr, "%s\n", SDL_GetError());
-		exit(SDL_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 
 	flags = IMG_INIT_PNG;
 	if (flags != IMG_Init(flags)) {
 		fprintf(stderr, "%s\n", IMG_GetError());
-		exit(IMG_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 
-	window->window = SDL_CreateWindow("",
+	window = SDL_CreateWindow("isonomly",
 			SDL_WINDOWPOS_UNDEFINED,
 			SDL_WINDOWPOS_UNDEFINED,
-			800,
-			600,
+			WINDOW_WIDTH,
+			WINDOW_HEIGHT,
 			0);
-	if (window->window == NULL) {
+	if (window == NULL) {
 		fprintf(stderr, "%s\n", SDL_GetError());
-		exit(SDL_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 
-	window->renderer = SDL_CreateRenderer(window->window,
+	renderer = SDL_CreateRenderer(window,
 			-1,
 			SDL_RENDERER_PRESENTVSYNC |
+			SDL_RENDERER_TARGETTEXTURE |
 			SDL_RENDERER_ACCELERATED);
-	if (window->renderer == NULL) {
+	if (renderer == NULL) {
 		fprintf(stderr, "%s\n", SDL_GetError());
-		exit(SDL_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 
-	SDL_Surface *surface = IMG_Load("res/atlas.png");
+
+	SDL_Surface *surface;
+	surface = IMG_Load("res/atlas.png");
 	if (surface == NULL) {
 		fprintf(stderr, "%s\n", IMG_GetError());
-		exit(IMG_FAILURE);
-	}
-	window->pallet = SDL_CreateTextureFromSurface(window->renderer,
-			surface);
-	if (window->pallet == NULL) {
-		fprintf(stderr, "%s\n", SDL_GetError());
-		exit(IMG_FAILURE);	
-	}
-	SDL_QueryTexture(window->pallet,
-		NULL,
-		NULL,
-		&window->palletWidth,
-		&window->palletHeight);
-	window->palletEntryWidth = 32;
-	window->palletEntryHeight = 32;
-	window->palletEntrySelected = 0;
-	window->palletRows = window->palletHeight / window->palletEntryHeight;
-	window->palletColumns = window->palletWidth / window->palletEntryWidth;
-	window->palletSize = window->palletColumns * window->palletRows;
-	window->offsetX = 0;
-	window->offsetY = 0;
-}
-
-void gridtopixel(Window *window, int x, int y, int z, int *a, int *b)
-{
-	*a = (x-y) * window->palletEntryWidth / 2;
-	*b = (x+y) * window->palletEntryHeight / 4;
-}
-
-void pixeltogrid(Window *window, int x, int y, int *a, int *b)
-{
-	*a = (2.0 * y) / window->palletEntryHeight
-			+ (float)x / window->palletEntryWidth;
-
-	*b = (2.0 * y) / window->palletEntryHeight
-			- (float)x / window->palletEntryWidth;
-}
-
-void window_show(Window *window)
-{
-	SDL_Renderer *renderer = window->renderer;
-	SDL_Rect dstrect;
-	SDL_Rect srcrect;
-
-	/* Clear Screen */
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	SDL_RenderClear(renderer);
-
-	dstrect.x = window->mouseX;
-	dstrect.y = window->mouseY;
-	dstrect.w = window->palletEntryWidth;
-	dstrect.h = window->palletEntryHeight;
-
-	int selectedRow;
-	int selectedColumn;
-	selectedRow = window->palletEntrySelected / window->palletColumns;
-	selectedColumn = window->palletEntrySelected % window->palletColumns;
-	srcrect.x = selectedColumn * window->palletEntryWidth;
-	srcrect.y = selectedRow * window->palletEntryHeight;
-	srcrect.w = window->palletEntryWidth;
-	srcrect.h = window->palletEntryHeight;
-
-	/* Render Pallet Selection */
-	// SDL_RenderCopy(renderer, window->pallet, &srcrect, &dstrect);
-
-	float m = 1.0 / 2.0;
-	int width;
-	int height;
-	SDL_GetWindowSize(window->window, &width, &height);
-
-	/* Render Grid */
-	SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-	int lines = height / (window->palletEntryHeight / 2);
-	for (int i = -lines; i < lines; i++) {
-		int x1, y1, x2, y2;
-		x1 = 0;
-		y1 = window->palletEntryHeight / 2
-			+ i * window->palletEntryHeight / 2;
-		x2 = width;
-		y2 = window->palletEntryHeight / 2
-			+ m * (i * window->palletEntryWidth + width);
-		SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+		exit(EXIT_FAILURE);
 	}
 
-	SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
-	for (int i = 0; i < 2 * lines; i++) {
-		int x1, y1, x2, y2;
-		x1 = 0;
-		y1 = window->palletEntryHeight / 2
-			+ i * window->palletEntryHeight / 2;
-		x2 = width;
-		y2 = window->palletEntryHeight / 2
-			+ -m * (-i * window->palletEntryWidth + width);
-		SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
-	}
+	Pallet pallet;
+	Canvas canvas;
+	pallet_init(&pallet, renderer,
+			0, 0,
+			WINDOW_WIDTH / 2, WINDOW_HEIGHT);
+	canvas_init(&canvas, renderer,
+			WINDOW_WIDTH / 2, 0,
+			WINDOW_WIDTH / 2, WINDOW_HEIGHT,
+			&pallet);
 
-	/* Render Pallet */
-	dstrect.x = 0;
-	dstrect.y = 0;
-	dstrect.w = window->palletWidth;
-	dstrect.h = window->palletHeight;
-	SDL_RenderCopy(renderer, window->pallet, NULL, &dstrect);
+	const Uint8 *keys =
+		SDL_GetKeyboardState(NULL);
 
-	for (int i = 0; i < GRID_COLUMNS; i++)
-	for (int j = 0; j < GRID_ROWS; j++)
-	for (int k = 0; k < GRID_LAYERS; k++) {
-		if (grid[i + j * GRID_COLUMNS + k * GRID_COLUMNS * GRID_ROWS])
-			continue;
-		int x, y, z, a, b;
-		x = i + window->offsetX;
-		y = j + window->offsetY;
-		z = k;
-		gridtopixel(window, x, y, z, &a, &b);
+	Uint64 ticks, start, end;
+	bool doUpdate;
 
-		dstrect.x = a - window->palletEntryWidth / 2;
-		dstrect.y = b - window->palletEntryHeight / 2;
-		dstrect.w = window->palletEntryWidth;
-		dstrect.h = window->palletEntryHeight;
-		SDL_RenderCopy(renderer, window->pallet, &srcrect, &dstrect);
-	}
-
-	/* Swap Buffer */
-	SDL_RenderPresent(renderer);
-}
-
-int main(int argc, char *argv[])
-{
-	Window window;
-	window_init(&window);
-
-	const Uint8 *keys = SDL_GetKeyboardState(NULL);
-
-	for (int i = 0; i < GRID_SPACES; i++)
-		grid[i] = 1;
-
-	Uint64 start, end, ticks;
 	while (1) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event) != 0) {
 			if (event.type == SDL_QUIT)
 				goto quit;
 		}
+
 		end = SDL_GetTicks64();
 		ticks += end - start;
 		start = end;
 
-		int update;
-		int keydown;
+		if (ticks > 1.0 / 8.0 * 1000.0)
+			doUpdate = true;
 
-		if (ticks > 256)
-			update = 1;
-
-		if (update || !keydown) {
-			if (keys[SDL_SCANCODE_UP]) {
-				window.offsetX--;
-				window.offsetY--;
-				keydown = 1;
-			} else if (keys[SDL_SCANCODE_DOWN]) {
-				window.offsetY++;
-				window.offsetX++;
-				keydown = 1;
-			} else if (keys[SDL_SCANCODE_LEFT]) {
-				window.offsetX--;
-				keydown = 1;
-			} else if (keys[SDL_SCANCODE_RIGHT]) {
-				window.offsetX++;
-				keydown = 1;
-			} else {
-				keydown = 0;
-			}
-			update = 0;
+		if (doUpdate) {
+			if (keys[SDL_SCANCODE_UP])
+				canvas.view.y -= canvas.step.y;
+			if (keys[SDL_SCANCODE_DOWN])
+				canvas.view.y += canvas.step.y;
+			if (keys[SDL_SCANCODE_LEFT])
+				canvas.view.x -= canvas.step.x;
+			if (keys[SDL_SCANCODE_RIGHT])
+				canvas.view.x += canvas.step.x;
+			doUpdate = false;
 			ticks = 0;
 		}
-		Uint32 mouse = SDL_GetMouseState(&window.mouseX, &window.mouseY);
 
-		if (mouse & SDL_BUTTON(1)) {
-			int x, y;
-			pixeltogrid(&window, window.mouseX, window.mouseY, &x, &y);
-			grid[x + y * GRID_COLUMNS] = 0;
-		}
-
-		window_show(&window);
+		pallet_show(&pallet);
+		canvas_show(&canvas);
+		SDL_RenderPresent(renderer);
 	}
 quit:
 	return 0;
