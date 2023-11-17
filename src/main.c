@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <stddef.h>
 
+/*
+	TODO: Save and load grids.
+*/
+
 #define GRID_COLUMNS 64
 #define GRID_ROWS 64
 #define GRID_CELLS (GRID_COLUMNS * GRID_ROWS)
@@ -162,7 +166,7 @@ void canvas_show(Canvas *canvas)
 
 	const int nLines =
 		canvas->port.w / pallet->cell.w +
-		canvas->port.h / pallet->cell.h + 16;
+		canvas->port.h / pallet->cell.h;
 
 	SDL_SetRenderTarget(canvas->renderer, canvas->target);
 
