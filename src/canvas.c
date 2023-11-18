@@ -45,7 +45,7 @@ void canvas_show(Canvas *canvas)
 
 	const int nLines =
 		canvas->port.w / pallet->cell.w +
-		canvas->port.h / pallet->cell.h + 32;
+		canvas->port.h / pallet->cell.h + 4;
 
 	SDL_SetRenderTarget(canvas->renderer, canvas->target);
 
@@ -67,11 +67,13 @@ void canvas_show(Canvas *canvas)
 	dy = canvas->view.y % pallet->cell.h;
 
 	/* Lines Up */
-	x2 = -pallet->cell.w + dx;
-	y2 = -pallet->cell.h + dy + height;
 	x1 = -pallet->cell.w + dx + width;
-	y1 = -pallet->cell.h + dy + height
-			+ width * m;
+	y1 = -pallet->cell.h + dy + width * m;
+	x2 = -pallet->cell.w + dx;
+	y2 = -pallet->cell.h + dy;
+
+	y1 = y1 + height;
+	y2 = y2 + height;
 
 	for (int i = 0; i < nLines; i++) {
 		y1 -= pallet->cell.h;
@@ -80,11 +82,10 @@ void canvas_show(Canvas *canvas)
 	}
 
 	/* Lines Down */
+	x1 = -pallet->cell.w + dx + width;
+	y1 = -pallet->cell.h + dy + width * -m;
 	x2 = -pallet->cell.w + dx;
 	y2 = -pallet->cell.h + dy;
-	x1 = -pallet->cell.w + dx + width;
-	y1 = -pallet->cell.h + dy
-			+ width * -m;
 
 	for (int i = 0; i < nLines; i++) {
 		y1 += pallet->cell.h;
